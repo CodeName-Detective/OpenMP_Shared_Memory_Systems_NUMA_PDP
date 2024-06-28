@@ -12,7 +12,7 @@ Implemented Algorithms:
 - 2D Convolution
 
 Benchmarking:
-- Assessed Amdahl’s law and Gustafson’s Law using Strong Scaling and Week Scaling Respectively
+- Assessed Amdahl’s law and Gustafson’s Law using Strong Scaling and Week Scaling respectively
 - Speed Up
 - Efficiency
 - FLOPS
