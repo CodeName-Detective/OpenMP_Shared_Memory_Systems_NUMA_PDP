@@ -4,8 +4,7 @@
 // HISTORY: orignial program provided by Clay Breshears
 //
 
-#include <stdio.h>  
-#include <iostream> 
+#include <stdio.h>   
 #include <stdlib.h>  
 #include <omp.h>
 #include "2DArray.h"
@@ -18,8 +17,7 @@
 double dabs(double d){return (d<0.0?d:(-d));}
 
 void seqMatMult(int m, int n, int p, double** A, double** B, double** C)   
-{
-  #pragma omp parallel for collapse(2)     
+{    
   for (int i = 0; i < m; ++i)   
       for (int k = 0; k < p; ++k)   
          for (int j = 0; j < n; ++j)    
@@ -54,7 +52,6 @@ void copyQtrMatrix(double **X, int m, double **Y, int mf, int nf)
 }
 
 void AddMatBlocks(double **T, int m, int n, double **X, double **Y)
-// Add matrices X(m,n) to Y(m,n) and store in T
 {
    for (int i = 0; i < m; ++i)
       for (int j = 0; j < n; ++j)
@@ -62,7 +59,6 @@ void AddMatBlocks(double **T, int m, int n, double **X, double **Y)
 }
 
 void SubMatBlocks(double **T, int m, int n, double **X, double **Y)
-// Subtract matrix Y(m,n) from X(m,n) and store in T
 {
    for (int i = 0; i < m; ++i)
       for (int j = 0; j < n; ++j)
@@ -72,18 +68,10 @@ void SubMatBlocks(double **T, int m, int n, double **X, double **Y)
 
 void strassenMMult(double **C, double **A, double **B, int ml, int pl, int nl)
 {
-//
-// Check sizes of matrices;
-// if below threshold then compute product w/o recursion
-//
    if (((float)ml)*((float)nl)*((float)pl) < THRESHOLD)   
       matmultleaf(ml, nl, pl, A, B, C); 
 
    else {
-//
-// Apply OpenMP tasks to the eight recursive calls below
-//   be sure to not create data races between tasks
-//
       int m2 = ml/2;
       int n2 = nl/2;
       int p2 = pl/2;
@@ -123,108 +111,93 @@ void strassenMMult(double **C, double **A, double **B, int ml, int pl, int nl)
       double **C21 = new double*[m2];
       double **C22 = new double*[m2];
 
-      #pragma omp task
       copyQtrMatrix(A11, m2, A,  0,  0);
-      #pragma omp task
       copyQtrMatrix(A12, m2, A,  0, p2);
-      #pragma omp task
       copyQtrMatrix(A21, m2, A, m2,  0);
-      #pragma omp task
       copyQtrMatrix(A22, m2, A, m2, p2);
 
-      #pragma omp task
       copyQtrMatrix(B11, p2, B,  0,  0);
-      #pragma omp task
       copyQtrMatrix(B12, p2, B,  0, n2);
-      #pragma omp task
       copyQtrMatrix(B21, p2, B, p2,  0);
-      #pragma omp task
       copyQtrMatrix(B22, p2, B, p2, n2);
 
-      #pragma omp task
       copyQtrMatrix(C11, m2, C,  0,  0);
-      #pragma omp task
       copyQtrMatrix(C12, m2, C,  0, n2);
-      #pragma omp task
       copyQtrMatrix(C21, m2, C, m2,  0);
-      #pragma omp task
       copyQtrMatrix(C22, m2, C, m2, n2);
 
-      #pragma omp taskwait
-
-
+#pragma omp task
+{
       // S1 = A21 + A22
-      #pragma omp task
       AddMatBlocks(S1, m2, p2, A21, A22);
-      // S3 = A11 - A21
-      #pragma omp task
-      SubMatBlocks(S3, m2, p2, A11, A21);
-      // S5 = B12 - B11
-      #pragma omp task
-      SubMatBlocks(S5, p2, n2, B12, B11);
-      // S7 = B22 - B12
-      #pragma omp task
-      SubMatBlocks(S7, p2, n2, B22, B12);
-      // M2 = A11 * B11
-      #pragma omp task
-      strassenMMult(M2, A11, B11, m2, p2, n2);
-      // M3 = A12 * B21
-      #pragma omp task
-      strassenMMult(M3, A12, B21, m2, p2, n2);
-      #pragma omp taskwait
-
 
       // S2 = S1 - A11
-      #pragma omp task
       SubMatBlocks(S2, m2, p2, S1, A11);
-      // S6 = B22 - S5
-      #pragma omp task
-      SubMatBlocks(S6, p2, n2, B22, S5);
-      // M4 = S3 * S7
-      #pragma omp task
-      strassenMMult(M4, S3,  S7,  m2, p2, n2);
-      // M5 = S1 * S5
-      #pragma omp task
-      strassenMMult(M5, S1,  S5,  m2, p2, n2);
-      #pragma omp taskwait
-
 
       // S4 = A12 - S2
-      #pragma omp task
       SubMatBlocks(S4, m2, p2, A12, S2);
-      #pragma omp task
+}
+#pragma omp task
+{
+      // S3 = A11 - A21
+      SubMatBlocks(S3, m2, p2, A11, A21);
+
+      // S7 = B22 - B12
+      SubMatBlocks(S7, p2, n2, B22, B12);
+}
+#pragma omp task
+{
+      // S5 = B12 - B11
+      SubMatBlocks(S5, p2, n2, B12, B11);
+
+      // S6 = B22 - S5
+      SubMatBlocks(S6, p2, n2, B22, S5);
+
       // S8 = S6 - B21
       SubMatBlocks(S8, p2, n2, S6, B21);
+}
+#pragma omp taskwait
+
+#pragma omp task
+{
       // M1 = S2 * S6
-      #pragma omp task
       strassenMMult(M1, S2,  S6,  m2, p2, n2);
-      #pragma omp taskwait
 
-      
+      // M2 = A11 * B11
+      strassenMMult(M2, A11, B11, m2, p2, n2);
 
+      // M4 = S3 * S7
+      strassenMMult(M4, S3,  S7,  m2, p2, n2);
 
-      // M6 = S4 * B22
-      #pragma omp task
-      strassenMMult(M6, S4,  B22, m2, p2, n2);
-      // M7 = A22 * S8
-      #pragma omp task
-      strassenMMult(M7, A22, S8,  m2, p2, n2);
       // T1 = M1 + M2
-      #pragma omp task
       AddMatBlocks(T1, m2, n2, M1, M2);
-      #pragma omp taskwait
-
-      
 
       // T2 = T1 + M4
       AddMatBlocks(T2, m2, n2, T1, M4);
+}
+#pragma omp task
+{
+      // M3 = A12 * B21
+      strassenMMult(M3, A12, B21, m2, p2, n2);
+
+      // M5 = S1 * S5
+      strassenMMult(M5, S1,  S5,  m2, p2, n2);
+
+      // M6 = S4 * B22
+      strassenMMult(M6, S4,  B22, m2, p2, n2);
+
+      // M7 = A22 * S8
+      strassenMMult(M7, A22, S8,  m2, p2, n2);
+}
+#pragma omp taskwait
+
 
       // C11 = M2 + M3
       // C12 = T1 + M5 + M6
       // C21 = T2 - M7
       // C22 = T2 + M5
 
-      #pragma omp for collapse(2)
+//#pragma omp for
       for (int i = 0; i < m2; ++i)
          for (int j = 0; j < n2; ++j) {
             C11[i][j] = M2[i][j] + M3[i][j];
@@ -259,16 +232,15 @@ void strassenMMult(double **C, double **A, double **B, int ml, int pl, int nl)
    }
 }
               
-//
-//  "Helper" function to intialize C and start recursive routine
-//
 void matmultS(int m, int n, int p, double **A, double **B, double **C)
 {   
-    #pragma omp parallel
-    {
-      #pragma omp single nowait
-      strassenMMult(C, A, B, m, n, p);
-    }
+#pragma omp parallel 
+  {
+#pragma omp single
+     {
+    strassenMMult(C, A, B, m, n, p);
+     }
+  }
 }  
 
 
@@ -314,9 +286,6 @@ int main(int argc, char* argv[])
 
   int i, j;   
 
-//
-// Initialize with random values
-//
   for (i = 0; i < M; ++i) {   
     for (j = 0; j < P; ++j) {   
       A[i][j] = 5.0 - ((double)(rand()%100) / 10.0);  
@@ -349,7 +318,7 @@ int main(int argc, char* argv[])
 
    printf("Checking...");
    if (CheckResults(M, N, C, C4))
-     printf("Error in Recursive Matrix Multiplication\n\n");
+     printf("Error in Strassen Matrix Multiplication\n\n");
    else {
      printf("OKAY\n\n");
      printf("Speedup = %5.1fX\n", time1/time2);
