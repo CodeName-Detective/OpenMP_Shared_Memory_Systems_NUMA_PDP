@@ -10,6 +10,7 @@ Implemented Algorithms:
 - Matrix-Vector Multiplication
 - Matrix-Matrix Multiplication
 - Recursive Matrix-Matrix Multiplication
+- Strassen Matrix-Matrix Multiplication
 - 2D Convolution
 
 Benchmarking:
