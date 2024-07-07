@@ -4,6 +4,7 @@
 #include <stdlib.h> 
 #include <omp.h>
 #include "2DArray.h"
+#include <iostream>
 
 // define sizes of matrices to be used
 #define MM 1000
@@ -46,7 +47,8 @@ void matmultleaf(int mf, int ml, int nf, int nl, int pf, int pl, double **A, dou
 // nf, nl; /* first and last+1 j index */  
 // pf, pl; /* first and last+1 k index */  
 {
-	int i,j,k;   
+	int i,j,k;
+	#pragma omp parallel for collapse(2)
 	for (i = mf; i < ml; i++)   
 		for (j = nf; j < nl; j++)   
 			for (k = pf; k < pl; k++)   
@@ -77,21 +79,32 @@ void matmultrec(int mf, int ml, int nf, int nl, int pf, int pl, double **A, doub
 //   be sure to not create data races between tasks
 //
    // C00 += A00 * B00
+		#pragma omp task
 		matmultrec(mf, mf+(ml-mf)/2, nf, nf+(nl-nf)/2, pf, pf+(pl-pf)/2, A, B, C);   
    // C01 += A00 * B01
-		matmultrec(mf, mf+(ml-mf)/2, nf+(nl-nf)/2, nl, pf, pf+(pl-pf)/2, A, B, C);   
-   // C00 += A01 * B10
-		matmultrec(mf, mf+(ml-mf)/2, nf, nf+(nl-nf)/2, pf+(pl-pf)/2, pl, A, B, C);   
-   // C01 += A01 * B11
-		matmultrec(mf, mf+(ml-mf)/2, nf+(nl-nf)/2, nl, pf+(pl-pf)/2, pl, A, B, C);   
-   // C10 += A10 * B00
+		#pragma omp task
+		matmultrec(mf, mf+(ml-mf)/2, nf+(nl-nf)/2, nl, pf, pf+(pl-pf)/2, A, B, C); 
+	// C10 += A10 * B00
+		#pragma omp task
 		matmultrec(mf+(ml-mf)/2, ml, nf, nf+(nl-nf)/2, pf, pf+(pl-pf)/2, A, B, C);   
    // C11 += A10 * B01
+		#pragma omp task
 		matmultrec(mf+(ml-mf)/2, ml, nf+(nl-nf)/2, nl, pf, pf+(pl-pf)/2, A, B, C);   
+
+		#pragma omp taskwait
+
+   // C00 += A01 * B10
+		#pragma omp task
+		matmultrec(mf, mf+(ml-mf)/2, nf, nf+(nl-nf)/2, pf+(pl-pf)/2, pl, A, B, C);   
+   // C01 += A01 * B11
+		#pragma omp task
+		matmultrec(mf, mf+(ml-mf)/2, nf+(nl-nf)/2, nl, pf+(pl-pf)/2, pl, A, B, C);   
    // C10 += A11 * B10
+		#pragma omp task
 		matmultrec(mf+(ml-mf)/2, ml, nf, nf+(nl-nf)/2, pf+(pl-pf)/2, pl, A, B, C);   
    // C11 += A11 * B11
-		matmultrec(mf+(ml-mf)/2, ml, nf+(nl-nf)/2, nl, pf+(pl-pf)/2, pl, A, B, C);   
+		matmultrec(mf+(ml-mf)/2, ml, nf+(nl-nf)/2, nl, pf+(pl-pf)/2, pl, A, B, C);
+		#pragma omp taskwait   
 	}   
 }   
               
@@ -132,25 +145,19 @@ int CheckResults(int m, int n, double **C, double **C1)
   
 int main(int argc, char* argv[])   
 {      
-	int i, j; 
+	int i, j, M, N, P, nthreads; 
 	double start, time1, time2;
 
-   int M = MM;
-   int N = NN;
-   int P = PP;
- 
-//
-// If 3 values on command line, use those for matrix sizes
-//
-   if (argc != 4) {
-      printf("Suggested Usage: %s <M> <N> <P> \n", argv[0]);
-      printf("Using default values\n");
-   }
-   else {
-      M = atoi(argv[1]);
-      N = atoi(argv[2]);
-      P = atoi(argv[3]);
-   }
+	std::cout<<"Enter The Order of the matrices:";
+    std::cin>>M;
+
+	N = M;
+	P = M;
+    
+	std::cout<<"Enter number of threads:";
+    std::cin>>nthreads;
+
+	omp_set_num_threads(nthreads);
 
 	double  **A = Allocate2DArray< double >(M, P);
 	double  **B = Allocate2DArray< double >(P, N);
@@ -182,7 +189,11 @@ int main(int argc, char* argv[])
 
 	printf("Execute matmultr\n");
 	start = omp_get_wtime();
-	matmultr(M, N, P, A, B, C4);
+	#pragma omp parallel
+	{
+		#pragma omp single nowait
+		matmultr(M, N, P, A, B, C4);
+	}
 	time2 = omp_get_wtime() - start;
 	printf("Time = %f seconds\n\n",time2);
 
