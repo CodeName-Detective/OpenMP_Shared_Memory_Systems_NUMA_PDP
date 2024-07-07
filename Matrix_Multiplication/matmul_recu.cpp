@@ -118,9 +118,12 @@ void matmultr(int m, int n, int p, double **A, double **B, double **C)
 
 	for (i = 0; i < m; i++)   
 		for (j=0; j < n; j++)   
-			C[i][j] = 0;   
-
-	matmultrec(0, m, 0, n, 0, p, A, B, C);   
+			C[i][j] = 0;
+	#pragma omp parallel
+	{
+		#pragma omp single nowait   
+		matmultrec(0, m, 0, n, 0, p, A, B, C);
+	}   
 }  
 
 int CheckResults(int m, int n, double **C, double **C1)
@@ -189,11 +192,8 @@ int main(int argc, char* argv[])
 
 	printf("Execute matmultr\n");
 	start = omp_get_wtime();
-	#pragma omp parallel
-	{
-		#pragma omp single nowait
-		matmultr(M, N, P, A, B, C4);
-	}
+	matmultr(M, N, P, A, B, C4);
+	
 	time2 = omp_get_wtime() - start;
 	printf("Time = %f seconds\n\n",time2);
 
