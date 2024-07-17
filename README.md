@@ -1,4 +1,4 @@
-# OpenMP_Shared_Memory_Systems_NUMA_PDP
+# OpenMP Shared Memory Systems NUMA Parallel & Distributed Programming
 Parallel Algorithms for Shared Memory systems using OpenMP.
 
 Implemented Algorithms:
